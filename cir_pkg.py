@@ -136,9 +136,6 @@ class CIR450TrainNoPackage(object):
         self.locoType = hex2int(payload[2])  # 12
         self.trainNoHeader = hex2ascii(payload[3:7])  # 13
         self.trainNoDigit = hex2int(payload[7:10], reverse=True)  # 14
-        trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit)
-        _, _, desc, _ = resolveTrainNo(trainNo)
-        self.trainNoDesc = desc
 
         self.locoModel = hex2int(payload[10])
         self.locoModelExt = hex2int(payload[11])
@@ -176,8 +173,10 @@ class CIR450TrainNoPackage(object):
         tdcsState = tdcsSemphoreTrans.get(self.tdcsSemaphore & 0x0f, '未定义')
         locoType = locoTypeStateTable.get(self.locoType & 0x03)
         locomotive = locoTypeTable.get(self.locoModel, str(self.locoModel)) + '-' + "%04d" % self.locoNo
-        trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit) + '次'
-        trainDesc = self.trainNoDesc
+        trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit)
+        _, _, trainDesc, trainRelegation = resolveTrainNo(trainNo)
+        if trainRelegation is None:
+            trainRelegation = ''
         trainInfo = '总重: %dt 辆数:%d 计长:%.1f' % (self.trainWeight, self.trainCarriages, self.trainLength)
 
         if self.direction is None:
@@ -197,7 +196,7 @@ class CIR450TrainNoPackage(object):
         segment = '区段号:' + str(self.segmentNo) + ' ' + str(self.segmentActualNo)
         driver = '司机号:' + str(self.driverId)
         station = '车站号:' + str(self.stationNo)
-        info = ' '.join((locoType, locomotive, '担当' + trainNo, trainDesc,
+        info = ' '.join((locoType, locomotive, '担当%s次 %s%s' % (trainNo, trainRelegation, trainDesc),
                          trainMileage, trainSpeed, trainInfo, segment, driver, station, tdcsState))
         print(info)
         return info
