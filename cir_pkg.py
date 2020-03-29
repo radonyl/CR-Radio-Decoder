@@ -1,3 +1,26 @@
+# MIT License
+#
+# Copyright (c) 2020 Alex L Manstein (alex.l.manstein@gmail.com)
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
 from cir_utils import *
 from decimal import Decimal
 from train_no_def import resolveTrainNo
@@ -23,30 +46,34 @@ class CIR450Package(object):
     """
     reference: TB/T 3052-2002
     """
-    def __init__(self, packageData):
-        self.modeWord = hexStr(packageData[0])
+
+    def __init__(self, packageData, ignoreCrc=True):
+        self.modeWord = hex2int(packageData[0])
         self.dataLength = hex2int(packageData[1])
-        self.addr = hexStr(packageData[2:7])
-        self.controlWord = hexStr(packageData[7])
-        self.commandWord = hexStr(packageData[8])
-        self.functionCode = hexStr(packageData[9])
+        self.addr = hex2int(packageData[2:7])
+        self.controlWord = hex2int(packageData[7])
+        self.commandWord = hex2int(packageData[8])
+        self.functionCode = hex2int(packageData[9])
         self.payloadLength = hex2int(packageData[10])
         self.payload = packageData[11:-2]
-        self.crc = hexStr(packageData[-2:])
+        self.crc = hex2int(packageData[-2:])
+
         if len(self.payload) != self.payloadLength:
             raise BrokenPackage('Payload incomplete!')
+        if not ignoreCrc and crc16(packageData[:-2]) != self.crc:
+            raise BrokenPackage('Corrupted Data!')
 
     def decode(self):
-        if self.addr == '0x003f1f0000' and \
-                self.controlWord == '0x1f' and \
-                self.commandWord == '0x8c' and \
-                self.functionCode == '0x30':
+        if self.addr == 0x003f1f0000 and \
+                self.controlWord == 0x1f and \
+                self.commandWord == 0x8c and \
+                self.functionCode == 0x30:
             return CIR450TrainNoPackage(self.payload)
-        elif (self.addr == '0x413f1f0000' or
-              self.addr == '0x413f1f0001') and \
-                self.controlWord == '0x1f' and \
-                self.commandWord == '0x8c' and \
-                self.functionCode == '0xa5':
+        elif (self.addr == 0x413f1f0000 or
+              self.addr == 0x413f1f0001) and \
+                self.controlWord == 0x1f and \
+                self.commandWord == 0x8c and \
+                self.functionCode == 0xa5:
             return CIR450LWPackage(self.payload)
 
         else:
@@ -90,6 +117,7 @@ class CIR450TrainNoPackage(object):
     """
     reference: GSM-R数字移动通信应用技术条件 第二分册：列车无线车次号校核信息传送系统
     """
+
     def __init__(self, payload):
         self.type = 'tdcs'
         try:
@@ -116,8 +144,19 @@ class CIR450TrainNoPackage(object):
         self.locoModelExt = hex2int(payload[11])
         self.locoNo = hex2int(payload[12:14], reverse=True)
 
-        trainMileage = hex2int(payload[14:17], reverse=True) & 0x3fffff
+        trainMileage = hex2int(payload[14:17], reverse=True)
+        if trainMileage != 0xffffff:
+            flag = trainMileage >> 22
+            trainMileage &= 0x3fffff
+            if flag >> 1:
+                trainMileage = -trainMileage
+            direction = flag & 0x01
+        else:
+            trainMileage = 9999999
+            direction = None
+
         self.trainMileage = Decimal("%.3f" % (trainMileage / 1000))
+        self.direction = direction
         self.trainSpeed = hex2int(payload[17:20], reverse=True) & 0x3ff
         self.trainWeight = hex2int(payload[20:22], reverse=True)
         trainLength = hex2int(payload[22:24], reverse=True)
@@ -139,10 +178,23 @@ class CIR450TrainNoPackage(object):
         locomotive = locoTypeTable.get(self.locoModel, str(self.locoModel)) + '-' + "%04d" % self.locoNo
         trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit) + '次'
         trainDesc = self.trainNoDesc
-        trainInfo = "总重: %dt 辆数:%d 计长:%.1f" % (self.trainWeight, self.trainCarriages, self.trainLength)
-        trainMileage = "公里标：K%d+%03d" % (int(self.trainMileage), self.trainMileage % 1 * 1000)
-        trainSpeed = "速度：%dkm/h" % self.trainSpeed
-        segment = '区段号: ' + str(self.segmentNo) + ' ' + str(self.segmentActualNo)
+        trainInfo = '总重: %dt 辆数:%d 计长:%.1f' % (self.trainWeight, self.trainCarriages, self.trainLength)
+
+        if self.direction is None:
+            direction = '(x)'
+        else:
+            direction = '(+)' if self.direction else '(-)'
+
+        if self.trainMileage < 0:
+            sign = '-'
+            mileage = abs(self.trainMileage)
+        else:
+            sign = ''
+            mileage = self.trainMileage
+
+        trainMileage = '公里标：%sK%d+%03d' % (sign, int(mileage), mileage % 1 * 1000) + direction
+        trainSpeed = '速度：%dkm/h' % self.trainSpeed
+        segment = '区段号:' + str(self.segmentNo) + ' ' + str(self.segmentActualNo)
         driver = '司机号:' + str(self.driverId)
         station = '车站号:' + str(self.stationNo)
         info = ' '.join((locoType, locomotive, '担当' + trainNo, trainDesc,
@@ -153,10 +205,11 @@ class CIR450TrainNoPackage(object):
 
 if __name__ == "__main__":
     import os
+
     asb_dir = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(asb_dir, 'cir_test', 'cir_test.log'), 'r') as f:
         cir_logs = f.read()
     for line in filter(lambda x: bool(x.strip()), cir_logs.split('\n')):
-        print(line)
-        pkg = CIR450Package(line.strip()[21:].split(' ')).decode()
+        print('\nMSG:', line)
+        pkg = CIR450Package(line.strip()[21:].split(':')[-1].split(' ')).decode()
         pkg.show()
