@@ -20,6 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 # 除特殊声明外，数据均来自于《中国铁路列车车次编定表(2018年1月版本)》
 # Domestic Train Relegation Definition
 point2PointRapidCargoTrainRelegation = (
@@ -320,6 +321,12 @@ DJTrainNo = (  # Wiki
     (7001, 8998, '管内动车组确认列车', None)
 )
 
+returningTrain = (
+    (1, 100, '有火回送动车组车底', None),
+    (101, 298, '无火回送动车组车底', None),
+    (301, 498, '回送普通客车底', None)
+)
+
 
 def searchTrainNoDigit(trainNoDigit, queryTable, queryCaptital=False):
     desc = '未知列车'
@@ -345,23 +352,31 @@ def searchTrainNoDigit(trainNoDigit, queryTable, queryCaptital=False):
 
 
 def resolveTrainNo(trainNo):
-    trainNo = str(trainNo)
     # 车次 描述 归属
     capital, desc, relegation = '', None, None
-    while not trainNo.isdigit():
-        capital += trainNo[0]
-        trainNo = trainNo[1:]
-    if trainNo.startswith('00') and capital == '':
-        no = int(trainNo[2:])
-        if 1 <= no <= 100:
-            desc = '有火回送动车组车底'
-        elif 101 <= no <= 298:
-            desc = '无火回送动车组车底'
-        elif 301 <= no <= 498:
-            desc = '回送普通客车底'
+    trainNo = str(trainNo)
+    idx = 0
+    for idx, c in enumerate(trainNo):
+        if trainNo[idx:].isdigit():
+            break
+    capital = trainNo[:idx]
+    trainNo = trainNo[idx:]
+    # Validate train no
+    if not trainNo or not trainNo.isdigit() or int(trainNo) <= 0:
+        raise ValueError("Invalid train no: {}".format(capital + trainNo))
+    if len(trainNo) > 2 and trainNo[0] == '0':
+        if not capital == '':
+            raise ValueError("Invalid train no: {}".format(capital + trainNo))
+        if trainNo[1] == '0':
+            capital = '00'
+            trainNo = trainNo[2:]
         else:
-            desc = '未知列车'
-    elif (trainNo.startswith('0') or capital in ['0K', '0T', '0Z']) and len(trainNo) <= 4:
+            capital = '0'
+            trainNo = trainNo[1:]
+    # Search train no
+    if capital == '00':
+        desc, relegation = searchTrainNoDigit(trainNo, returningTrain)
+    elif capital in ['0', '0K', '0T', '0Z'] and len(trainNo) <= 4:
         desc = '回送图定客车底'
     elif capital.startswith('F'):
         desc = '因故折返列车'
@@ -401,25 +416,3 @@ def resolveTrainNo(trainNo):
         desc = '未知列车'
 
     return capital, trainNo, desc, relegation
-
-
-if __name__ == '__main__':
-    print(resolveTrainNo('57001'))
-    print(resolveTrainNo('X2433'))
-    print(resolveTrainNo('X555'))
-    print(resolveTrainNo('X28002'))
-    print(resolveTrainNo('0184'))
-    print(resolveTrainNo('FK342'))
-    print(resolveTrainNo('DJ1342'))
-    print(resolveTrainNo('Z8801'))
-    print(resolveTrainNo('K9092'))
-    print(resolveTrainNo('G9092'))
-    print(resolveTrainNo('G1'))
-    print(resolveTrainNo('L7001'))
-    print(resolveTrainNo('55001'))
-    print(resolveTrainNo('T8801'))
-    print(resolveTrainNo('Y534'))
-    print(resolveTrainNo('7275'))
-    print(resolveTrainNo('5639'))
-    print(resolveTrainNo('78888'))
-    print(resolveTrainNo('K19'))

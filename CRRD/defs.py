@@ -19,31 +19,35 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import binascii
-
-
-def hex2int(l, reverse=False):
-    if isinstance(l, str):
-        return int(l, 16)
-    l = l[::-1] if reverse else l
-    return int(''.join(l), 16)
-
-
-def hex2bcd(l):
-    return ''.join(l).translate(
-        {ord('a'): '?', ord('b'): 'B', ord('c'): ' ', ord('d'): '-', ord('e'): ']', ord('f'): '['})
-
-
-def hex2ascii(l):
-    return binascii.a2b_hex(''.join(l)).decode('ascii')
-
-
-def crc16(data):
-    return binascii.crc_hqx(binascii.a2b_hex(''.join(data)), 0)
 
 
 locoTypeTable = {
+    1: "JF",
+    3: "QJ",
+    5: "JS",
+    6: "KD7",
+    # 工程机械
+    55: "LJKC",
+    57: "JW2",
+    58: "GQ164",
+    59: "JY29010",
+    60: "JZW3",
+    61: "JW5",
+    62: "JY29010P",
+    63: "HS280",
+    64: "240",
+    65: "HS260",
+    66: "GCS220",
+    68: "JY290",
+    69: "JY2905",
+    70: "JY360",
+    71: "JY230",
+
+    81: "DF21",
     # 内燃机车
+    101: 'DF',
+    102: 'DF2',
+    103: 'DF3',
     104: 'DF4B',
     105: 'DF4R',  # 客运型
     106: 'DF4C',
@@ -64,26 +68,52 @@ locoTypeTable = {
     121: 'ND3',
     122: 'ND4',
     123: 'ND5',
-
-    128: 'DFH21',
-    129: 'DF7B',
-    130: 'DF5R0',  # 口岸型
-    131: 'DF7C',
-
-    141: 'DF4D',
-    142: 'DF8B',
-    143: 'DF12',
-
+    124: "NY5",
+    125: "NY6",
+    126: "NY7",
+    127: "QY",
+    128: "DFH21",
+    129: "DF7B",
+    130: "DF5R0",  # 口岸型
+    131: "DF7C",
+    132: "DF7S",
+    133: "GK1",
+    134: "GK1F",
+    135: "DF4E",
+    136: "DF7D",
+    137: "GK1A",
+    138: "DF11",
+    139: "TA",
+    140: "DF10F",
+    141: "DF4D",
+    142: "DF8B",
+    143: "DF12",
+    144: "DF7E",
+    145: "NYJ1",
+    146: "NYJ2",
+    147: "NZJ2",
+    148: "DF4DJ",
+    149: "NDJ1",
+    150: "NDJ2",
     151: 'NJ2',
     152: 'DF7G',
     156: 'DF11Z',
     158: 'DF11G',
+
     # “和谐”内燃机车
     160: 'HXN3',
     161: 'HXN5',
     162: 'HXN3B',
     163: 'HXN5B',
+
+    191: "DF4DH",
+
+    201: "8G",
+    202: "8K",
+    203: "6G",
+    204: "6K",
     # “韶山”电力机车
+    205: "SS1",
     206: 'SS3',
     207: 'SS4',
     208: 'SS5',
@@ -96,8 +126,19 @@ locoTypeTable = {
     215: 'SS6B',
     216: 'SS9',
     217: 'SS7D',
+    # 早期国产电力动车组
+    218: "DJ",
+    219: "DJ1",
+    220: "DJ2",
+    221: "DJF",
+    222: "DJJ1",
+    223: "DJF",
 
     224: 'SS7E',
+    225: "SSJ3",
+    226: "SS3C",
+    229: "HX",
+    230: "KTT",
     # “和谐”电力机车
     231: 'HXD1',
     232: 'HXD2',
@@ -111,6 +152,10 @@ locoTypeTable = {
     240: 'HXD1D',
     241: 'HXD2D',
     242: 'HXD3D',
+    243: "HXD1F",
+    244: "HXD2F",
+
+    254: "CQDC",
     # 高原内燃机车
     300: '雪域神舟',
     # 动车组列车
@@ -129,10 +174,32 @@ locoTypeTable = {
     313: 'CRH2B',
     314: 'CRH2C',
     315: 'CRH2E',
+    316: "CRH6F",
 
-    319: 'CRH1B'
+    319: 'CRH1B',
+
+    # 工程机械
+    330: "CJ-1",
+    331: "CJ-2",
+    351: "JW3",
+    352: "JW4",
+    353: "JW7",
+    354: "TY2",
+    355: "TY5",
+    356: "TY6",
+    357: "DB7B",
+    358: "DA8",
+    359: "DA11",
+    360: "DA12",
+    361: "DA220",
+    381: "JZW4",
+    382: "DAX",
+    391: "QGC16",
+    392: "QGC25",
+    801: "NS1600",
 }
-tdcsSemphoreTrans = {
+
+dmisSemphoreTrans = {
     0: '始发车',
     1: '编组站',
     2: '出站',

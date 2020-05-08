@@ -21,9 +21,10 @@
 # SOFTWARE.
 
 
-from cir_utils import *
+from CRRD.utils import *
+from CRRD.defs import *
+from CRRD.trainno import resolveTrainNo
 from decimal import Decimal
-from train_no_def import resolveTrainNo
 
 
 class UnkownPackage(ValueError):
@@ -40,6 +41,16 @@ class BrokenPackage(ValueError):
 
 class ParseError(ValueError):
     pass
+
+
+class LBJ821Package(object):
+    # TODO: LBJ state machine support
+    def __init__(self, packageData):
+        pass
+        self.trainNoDigit = 0
+        self.trainMileage = 0
+        self.speed = 0
+        self.source = None
 
 
 class CIR450Package(object):
@@ -60,7 +71,8 @@ class CIR450Package(object):
 
         if len(self.payload) != self.payloadLength:
             raise BrokenPackage('Payload incomplete!')
-        if not ignoreCrc and crc16(packageData[:-2]) != self.crc:
+        self.crcValid = crc16(packageData[:-2]) == self.crc
+        if not ignoreCrc and not self.crcValid:
             raise BrokenPackage('Corrupted Data!')
 
     def decode(self):
@@ -116,10 +128,11 @@ class CIR450LWPackage(object):
 class CIR450TrainNoPackage(object):
     """
     reference: GSM-R数字移动通信应用技术条件 第二分册：列车无线车次号校核信息传送系统
+               TJ/DW014-2012 GSM-R数字移动通信应用技术条件 第九分册：数据传输应用接口及设备
     """
 
     def __init__(self, payload):
-        self.type = 'tdcs'
+        self.type = 'dmis'
         try:
             self.parse(payload)
         except Exception as e:
@@ -131,35 +144,53 @@ class CIR450TrainNoPackage(object):
 
     def parse(self, payload):
         # self.payload = payload
-        self.tdcsSemaphore = hex2int(payload[0])  # 10
-        self.semaphoreType = hex2int(payload[1])  # 11
+        self.dmisSemaphore = hex2int(payload[0])  # 10
+        self.semaphoreType = hex2int(payload[1])  # 11 identical to # 10
         self.locoType = hex2int(payload[2])  # 12
+        # parse train no info
         self.trainNoHeader = hex2ascii(payload[3:7])  # 13
         self.trainNoDigit = hex2int(payload[7:10], reverse=True)  # 14
-
+        self.trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit)
+        try:
+            _, _, trainNoDesc, trainRelegation = resolveTrainNo(self.trainNo)
+        except ValueError:
+            trainNoDesc = '无效车次'
+            trainRelegation = None
+        if trainRelegation is None:
+            trainRelegation = ''
+        self.trainNoDesc = trainNoDesc
+        self.trainRelegation = trainRelegation
+        # parse locomotive info
         self.locoModel = hex2int(payload[10])
         self.locoModelExt = hex2int(payload[11])
         self.locoNo = hex2int(payload[12:14], reverse=True)
-
+        # parse train mileage
         trainMileage = hex2int(payload[14:17], reverse=True)
-        if trainMileage != 0xffffff:
+        isTestData = False
+        direction = None
+        if trainMileage in [9999888, 8888888]:  # test data patterns
+            isTestData = True
+        elif trainMileage == 0xffffff or trainMileage == 9999999:
+            # mileage == 0xfffff means no mileage data available
+            # mileage == 9999999 means this package is only for the station CTC and will not be forwarded further.
+            trainMileage = 9999999
+        else:
             flag = trainMileage >> 22
             trainMileage &= 0x3fffff
             if flag >> 1:
                 trainMileage = -trainMileage
             direction = flag & 0x01
-        else:
-            trainMileage = 9999999
-            direction = None
-
         self.trainMileage = Decimal("%.3f" % (trainMileage / 1000))
+        self.isTestData = isTestData
         self.direction = direction
+        # parse train properties
         self.trainSpeed = hex2int(payload[17:20], reverse=True) & 0x3ff
+        # print((hex2int(payload[17:20], reverse=True) & 0xffffc00) >> 10)  # TODO: What's this ?
         self.trainWeight = hex2int(payload[20:22], reverse=True)
         trainLength = hex2int(payload[22:24], reverse=True)
         self.trainLength = Decimal("%.1f" % (trainLength / 10))
         self.trainCarriages = hex2int(payload[24])
-
+        # parse train monitor info
         self.stationNo = hex2int(payload[25])
         self.stationNoExt = hex2int(payload[26])
 
@@ -170,13 +201,9 @@ class CIR450TrainNoPackage(object):
         # self.driverIdExt   = hex2int(payload[31])
 
     def show(self):
-        tdcsState = tdcsSemphoreTrans.get(self.tdcsSemaphore & 0x0f, '未定义')
+        dmisState = dmisSemphoreTrans.get(self.dmisSemaphore & 0x0f, '未定义')
         locoType = locoTypeStateTable.get(self.locoType & 0x03)
         locomotive = locoTypeTable.get(self.locoModel, str(self.locoModel)) + '-' + "%04d" % self.locoNo
-        trainNo = self.trainNoHeader.strip() + str(self.trainNoDigit)
-        _, _, trainDesc, trainRelegation = resolveTrainNo(trainNo)
-        if trainRelegation is None:
-            trainRelegation = ''
         trainInfo = '总重: %dt 辆数:%d 计长:%.1f' % (self.trainWeight, self.trainCarriages, self.trainLength)
 
         if self.direction is None:
@@ -196,19 +223,9 @@ class CIR450TrainNoPackage(object):
         segment = '区段号:' + str(self.segmentNo) + ' ' + str(self.segmentActualNo)
         driver = '司机号:' + str(self.driverId)
         station = '车站号:' + str(self.stationNo)
-        info = ' '.join((locoType, locomotive, '担当%s次 %s%s' % (trainNo, trainRelegation, trainDesc),
-                         trainMileage, trainSpeed, trainInfo, segment, driver, station, tdcsState))
+        info = ' '.join((locoType, locomotive, '担当%s次 %s%s' % (self.trainNo, self.trainRelegation, self.trainNoDesc),
+                         trainMileage, trainSpeed, trainInfo, segment, driver, station, dmisState))
+        if self.isTestData:
+            info += '(测试数据)'
         print(info)
         return info
-
-
-if __name__ == "__main__":
-    import os
-
-    asb_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(asb_dir, 'cir_test', 'cir_test.log'), 'r') as f:
-        cir_logs = f.read()
-    for line in filter(lambda x: bool(x.strip()), cir_logs.split('\n')):
-        print('\nMSG:', line)
-        pkg = CIR450Package(line.strip()[21:].split(':')[-1].split(' ')).decode()
-        pkg.show()
