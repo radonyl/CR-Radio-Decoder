@@ -24,21 +24,26 @@
 import binascii
 
 
-def hex2int(l, reverse=False):
-    if isinstance(l, str):
-        return int(l, 16)
-    l = l[::-1] if reverse else l
-    return int(''.join(l), 16)
+def hex2int(s, reverse=False):
+    if isinstance(s, str):
+        return int(s, 16)
+    s = s[::-1] if reverse else s
+    return int(''.join(s), 16)
 
 
-def hex2bcd(l):
-    return ''.join(l).translate(
-        {ord('a'): '?', ord('b'): 'B', ord('c'): ' ', ord('d'): '-', ord('e'): ']', ord('f'): '['})
+def hex2bcd(s):
+    if isinstance(s, bytes):
+        return hex2bcd(str(s).replace(r'\x', ''))
+    elif isinstance(s, str):
+        return ''.join(s).translate(
+            {ord('a'): '?', ord('b'): 'B', ord('c'): ' ', ord('d'): '-', ord('e'): ']', ord('f'): '['})
+    else:
+        raise ValueError
 
 
-def hex2ascii(l):
-    return binascii.a2b_hex(''.join(l)).decode('ascii')
+def hex2ascii(s):
+    return binascii.a2b_hex(''.join(s)).decode('ascii')
 
 
 def crc16(data):
-    return binascii.crc_hqx(binascii.a2b_hex(''.join(data)), 0)
+    return binascii.crc_hqx(data, 0)

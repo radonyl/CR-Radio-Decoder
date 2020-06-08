@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 
-locoTypeTable = {
+loco_model_trans = {
     1: "JF",
     3: "QJ",
     5: "JS",
@@ -199,7 +199,7 @@ locoTypeTable = {
     801: "NS1600",
 }
 
-dmisSemphoreTrans = {
+dmis_semphore_trans = {
     0: '始发车',
     1: '编组站',
     2: '出站',
@@ -211,7 +211,7 @@ dmisSemphoreTrans = {
     8: '预留'
 }
 
-locoTypeStateTable = {
+loco_type_trans = {
     0b00: '货车本务',
     0b10: '货车补机',
     0b01: '客车本务',
