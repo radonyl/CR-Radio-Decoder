@@ -22,7 +22,7 @@
 import datetime
 import struct
 from decimal import Decimal
-from typing import List, Tuple, Union, Any
+from typing import Tuple, Union
 
 from CRRD.package import FFSKHeader, CIR450TDCS, LBJ821Notice, CIR450LW, LBJ821Time
 from CRRD.utils import crc16, hex2bcd
@@ -46,7 +46,7 @@ class POCSAGDecoder:
     """
 
     @staticmethod
-    def decode(package_text: str, address: int) -> Tuple[str, Any]:
+    def decode(package_text: str, address: int) -> Union[LBJ821Notice, LBJ821Time]:
         """
         parse POCSAG text to LBJ alarm or LBJ time messages
         :param package_text: received POCSAG text
@@ -64,7 +64,7 @@ class POCSAGDecoder:
                         else:
                             return LBJ821Notice._make((train_no, speed, None))
                     else:
-                        raise EmptyPackage
+                        raise EmptyPackage("Empty Package")
                 elif address == 1234008:
                     return LBJ821Time._make((POCSAGDecoder._parse_time(package[0]),))
         else:
@@ -82,7 +82,7 @@ class POCSAGDecoder:
         return datetime.time(hour=int(s[1:3]), minute=int(s[3:5]))
 
     @staticmethod
-    def validate(package: List[str], address: int) -> bool:
+    def validate(package: Tuple[str], address: int) -> bool:
         """
         Validate LBJ POCSAG packages
         :param package: text of package
@@ -112,21 +112,21 @@ class POCSAGDecoder:
         """
         if address == 1234000:  # LBJ alarm
             if len(package) != 3:
-                raise BrokenPackage
+                raise BrokenPackage("Broken Package: Invalid format")
             unknown_fill = ['-----', '---', '-----']
             for i in range(3):
                 if package[i].isdigit() and len(package[i]) <= len(unknown_fill[i]) or package[i] == unknown_fill[i]:
                     continue
                 else:
-                    raise BrokenPackage
+                    raise BrokenPackage(f"Broken Package: Part{i + 1}")
             return True
         elif address == 1234008:  # LBJ time
             if len(package) != 1 and len(package[0]) != 5:
-                raise BrokenPackage
+                raise BrokenPackage("Broken Package: Invalid format")
             text = package[0]
             if not text[0].isdigit() and text[1:].isdigit() and int(text[1:3]) < 24 and int(text[3:5]) < 60:
                 return True
-            raise BrokenPackage
+            raise BrokenPackage("Broken Package: Invalid time")
         else:
             raise UnknownPackage
 
@@ -159,7 +159,9 @@ class FFSKDecoder(object):
                 raise BrokenPackage
             package = CIR450TDCS._make(payload)
             # TODO: Add validation here
-            print(package.to_string())
+            if package.locomotive_model == 0 or package.train_no_digit == 0 or len(str(package.driver_id)) < 7:
+                raise EmptyPackage
+            # print(package.to_string())
             return package
         elif (header.address == b'\x41\x3f\x1f\x00\x00' or
               header.address == b'\x41\x3f\x1f\x00\x01') and \

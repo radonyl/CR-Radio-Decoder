@@ -105,13 +105,13 @@ class CIR450TDCS:
         tmp = int.from_bytes(b, 'little')
         speed = tmp & 0x3ff
         reserved = tmp >> 10
-        return speed, reserved
+        return reserved, speed
 
     def to_string(self) -> str:
         dmis_semaphore = self.dmis_semaphore
         loco_type = self.locomotive_type
         locomotive = "%s-%04d" % (self.locomotive_model, self.locomotive_no)
-        train_property = '总重: %dt 辆数:%d 计长:%.1f' % (self.train_weight, self.train_carriages, self.train_length)
+        train_property = '总重: %dt 辆数:%d 计长:%s' % (self.train_weight, self.train_carriages, self.train_length)
 
         # Mileage
         if self.direction is None:

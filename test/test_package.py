@@ -24,11 +24,12 @@ def test_POCSAG():
                         pass
                         # print('Clock deviation:', recv_time, pkg.time)
                 if msg_addr == '1234000':
-                    print(pkg)
+                    pass
+                    #print(pkg)
             elif msg_addr in ['003f1f0000']:
                 data = binascii.a2b_hex(msg_data.split(':')[-1].replace(' ', ''))
                 pkg = FFSKDecoder.decode(data)
-                print(pkg.to_string())
+                print(msg_time, pkg.to_string())
         except BrokenPackage:
             pass
             # print(f'Broken {[msg_addr, msg_data]}')
