@@ -1,22 +1,22 @@
 ## Introduction to CRRD
 CRRD: China railway radio decoder. It supports the following packages:
 - POCSAG type
-    - LBJ Train notice
-    - LBJ Time sync
+    - LBJ train notice (approaching alarm)
+    - LBJ time sync
 - FFSK type
     - TDCS wireless train no
     - TDCS wireless dispatching command (**partly untested**)
     - CIR cargo train tail device (partly supported)
-    - LBJ passage train tail device (**partly untested**)
+    - LBJ passengers train tail device (**partly untested**)
     - LBJ train protection alarm (**totally untested**)
 - Train no resolve
     - use CRRD.resolveTrainNo
 ## Installation
-CRRD support Python3.8+ only(may also 3.7, but untested). It can be install using pip:
+CRRD supports Python3.8+ only(may also 3.7, but untested). It can be install using pip:
 ```shell script
 pip install CRRD
 ```
-or simply copy CRRD module directory to your project
+or simply copy the CRRD module directory to your project
 
 ## Usage
 ```python
@@ -43,4 +43,4 @@ CRRD.resolveTrainNo('88392J') # ValueError: Invalid train no: 88392J
 
 
 ## Bug Report
-feel free to report bug or request a feature on Github issue
+feel free to report bug or request a feature on Github issues
