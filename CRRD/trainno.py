@@ -328,14 +328,14 @@ returningTrain = (
 )
 
 
-def searchTrainNoDigit(trainNoDigit, queryTable, queryCaptital=False):
+def searchTrainNoDigit(trainNoDigit, queryTable, queryCapital=False):
     desc = '未知列车'
     capital = ''
     relegation = None
     relegationTable = None
     for entry in queryTable:
         if entry[0] <= int(trainNoDigit) <= entry[1]:
-            if queryCaptital:
+            if queryCapital:
                 desc, capital, relegationTable = entry[2:]
             else:
                 desc, relegationTable = entry[2:]
@@ -345,7 +345,7 @@ def searchTrainNoDigit(trainNoDigit, queryTable, queryCaptital=False):
             if entry[0] <= int(trainNoDigit) <= entry[1]:
                 relegation = entry[2]
                 break
-    if queryCaptital:
+    if queryCapital:
         return desc, capital, relegation
     else:
         return desc, relegation
@@ -381,10 +381,10 @@ def resolveTrainNo(trainNo):
     elif capital.startswith('F'):
         desc = '因故折返列车'
     elif capital == '' and len(trainNo) == 5:
-        desc, capital, relegation = searchTrainNoDigit(trainNo, fullTrainNo, queryCaptital=True)
+        desc, capital, relegation = searchTrainNoDigit(trainNo, fullTrainNo, queryCapital=True)
     elif capital == 'X':
         if len(trainNo) == 5:
-            desc, _, relegation = searchTrainNoDigit(trainNo, fullTrainNo, queryCaptital=True)
+            desc, _, relegation = searchTrainNoDigit(trainNo, fullTrainNo, queryCapital=True)
             desc += '(挂有快运车辆)'
         else:
             desc, relegation = searchTrainNoDigit(trainNo, XTrainNo)

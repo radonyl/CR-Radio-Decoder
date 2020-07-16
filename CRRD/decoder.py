@@ -19,15 +19,12 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import datetime
-import struct
-from decimal import Decimal
-from typing import Tuple, Union
 
-from CRRD.package import FFSKHeader, CIR450TDCS, LBJ821Notice, CIR450LW, LBJ821Time
-from CRRD.utils import crc16, hex2bcd
+from CRRD.package import *
+from CRRD.utils import crc16
 
 
+# TODO: do validation when decoding packages, to distinct broken or unknown packages
 class UnknownPackage(ValueError):
     pass
 
@@ -42,7 +39,7 @@ class EmptyPackage(ValueError):
 
 class POCSAGDecoder:
     """
-    Refer to TB∕T3504-2018 "Train approaching alarm ground equipment"
+    Reference: TB∕T3504-2018《列车接近预警地面设备》（列车接近预警部分）
     """
 
     @staticmethod
@@ -87,11 +84,11 @@ class POCSAGDecoder:
         Validate LBJ POCSAG packages
         :param package: text of package
         :param address: POCSAG address of this package
-        :return:
+        :return: bool: is valid or not
 
         POCSAG has no CRC validation thus received data could be erroneous (including address)
 
-        821MHz LBJ Alarm (address = 1234000) Example:
+        1. 821MHz LBJ Alarm (address = 1234000) Example:
         Valid ones:
         1328 294 11761: Train 1328, speed 294kph, mileage K1176+100m
         86052 5 ----- : Mileage unknown
@@ -105,7 +102,7 @@ class POCSAGDecoder:
         We may need extra methods to prevent pseudo valid ones say error happened
         but looked fine however make no sense in the context
 
-        821MHz LBJ Time (address = 1234008) Example:
+        2. 821MHz LBJ Time (address = 1234008) Example:
         *0302 : 3 o'clock and 2 minutes, localtime
           '*' stands for any non-digit char, depends on POCSAG decoder's charset (value 0xA)
 
@@ -133,13 +130,8 @@ class POCSAGDecoder:
 
 class FFSKDecoder(object):
     """
-    reference: TB/T 3052-2002
-
-
+    reference: TB/T 3052-2002《列车无线调度通信系统制式及主要技术条件》
     """
-
-    def __init__(self, packageData, ignoreCrc=True):
-        pass
 
     @staticmethod
     def decode(package_bytes: bytes):
@@ -147,46 +139,82 @@ class FFSKDecoder(object):
         payload = package_bytes[11:-2]
         crc = struct.unpack(">H", package_bytes[-2:])[0]
         if len(payload) != header.payload_length or crc != crc16(package_bytes[:-2]):
-            # raise BrokenPackage
             print('broken!')
-            return None
+            raise BrokenPackage
         if header.address == b'\x00\x3f\x1f\x00\x00' and \
                 header.control_word == 0x1f and \
-                header.command_word == 0x8c and \
-                header.function_code == 0x30:
-            # This is TDCS Wireless train no package
-            if len(payload) != 32:
-                raise BrokenPackage
-            package = CIR450TDCS._make(payload)
-            # TODO: Add validation here
-            if package.locomotive_model == 0 or package.train_no_digit == 0 or len(str(package.driver_id)) < 7:
-                raise EmptyPackage
-            # print(package.to_string())
-            return package
+                header.command_word == 0x8c:
+            if header.function_code == 0x30:
+                """
+                TDCS wireless train no package
+                References:
+                1. GSM-R数字移动通信应用技术条件 第二分册：列车无线车次号校核信息传输系统(V1.0) [2007.3]
+                2. TB/T 3325—2013《列车无线车次号校核信息传送系统》
+                """
+                if len(payload) != 32:
+                    raise BrokenPackage
+                package = CIR450TrainNo(payload)
+                # TODO: Add validation here
+                if package.locomotive_model == 0 or package.train_no == 0 or len(str(package.driver_id)) < 7:
+                    raise EmptyPackage
+                return package
+
+            elif header.function_code == 0x88:
+                """
+                TDSC wireless dispatch command package
+                References:
+                1. 450MHz 调度命令无线传输系统技术条件(V.43) [铁道部运输局 2005.4]
+                THIS IS PARTLY UNTESTED!! NO PACKAGE RECEIVED FOR VERIFICATION
+                """
+                if payload[0] in [0x80, 0x81, 0x82, 0x91]:  # Locomotive -> Station
+                    package = CIR450DispatchCommandReply(payload)
+                    return package
+                elif 1 <= payload[0] <= 0x20:  # Station -> Locomotive
+                    package = CIR450DispatchCommand(payload)
+                    return package
+
         elif (header.address == b'\x41\x3f\x1f\x00\x00' or
               header.address == b'\x41\x3f\x1f\x00\x01') and \
                 header.mode_word == 0x0c and \
                 header.control_word == 0x1f and \
                 header.command_word == 0x8c and \
                 header.function_code == 0xa5:
-            # This is LW system package, TODO: Support different standards of LW
-            if len(payload) == 15:
-                locomotive_no = hex2bcd(payload[0:2])
-                command = payload[2:4]
-                param = payload[4:6]
-                more = payload[6:]
-                package = CIR450LW._make((locomotive_no, command, param, more))
+            """
+            LW system package (LW: train tail device, used for monitoring pipe pressure, may on various channels)
+            Reference:
+            1. TB/T 2973-2006 《列车尾部安全防护装置及附属设备》 (FFSK over 450MHz channel)
+            2. TJ/DW 012—2009《列车防护报警和客车列尾系统技术条件》（FFSK over 800MHz channel)
+            TBD: GSM-R channel, DMR over 400MHz channel
+            """
+            try:
+                package = LW(payload)
+                return package
+            except RuntimeError as Error:
+                raise UnknownPackage(str(Error))
+
         elif header.address == b'\x00\x00\x00\x00\x00' and \
                 header.mode_word == 0x0c and \
                 header.control_word == 0x1f and \
                 header.command_word == 0x8c and \
                 header.function_code == 0x40:
             """
-            Reference:
-            TB/T 3504-2018 - 道口报警、施工防护报警
-            800MHz旅客列车尾部装置和列车防护报警系统设备技术条件(讨论稿20090903)
+            Train protection alarm package
+            References:
+            1. TB/T 3504-2018《列车接近预警地面设备》（道口报警、施工防护报警部分）
+            2. TJ/DW 012—2009《列车防护报警和客车列尾系统技术条件》
+            THIS IS UNTESTED!! NO PACKAGE RECEIVED FOR VERIFICATION
             """
-            pass  # TODO: Support TB/T 3504-2018
+            function = payload[0]
+            if function in (1, 2):
+                package = LBJ866TrainAlarm(payload)
+            elif function in (3, 4, 5, 6):
+                package = LBJ866GroundAlarm(payload)
+            elif function in (7, 8):
+                package = LBJ866Test(payload)
+            else:
+                raise UnknownPackage(f"Invalid function {function} for train protection alarm package")
+            return package
+
         else:
             print('Unknown!')
             raise UnknownPackage

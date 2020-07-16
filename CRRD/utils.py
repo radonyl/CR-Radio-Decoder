@@ -33,12 +33,23 @@ def hex2int(s, reverse=False):
 
 def hex2bcd(s):
     if isinstance(s, bytes):
-        return hex2bcd(str(s).replace(r'\x', ''))
+        return hex2bcd(bytes2hex(s))
     elif isinstance(s, str):
-        return ''.join(s).translate(
+        return s.translate(
             {ord('a'): '?', ord('b'): 'B', ord('c'): ' ', ord('d'): '-', ord('e'): ']', ord('f'): '['})
     else:
         raise ValueError
+
+
+def bytes2hex(s):
+    if isinstance(s, bytes):
+        return binascii.b2a_hex(s).decode('ascii')
+    else:
+        raise ValueError
+
+
+def decimal2mileage(d):
+    return "K%d+%03d" % (int(d), d % 1 * 1000)
 
 
 def hex2ascii(s):
